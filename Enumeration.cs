@@ -64,12 +64,7 @@ namespace Headspring
 
         public int CompareTo(TEnumeration other)
         {
-            if (other == null)
-            {
-                Value.CompareTo(other);
-            }
-
-            return Value.CompareTo(other.Value);
+            return Value.CompareTo(other == default(TEnumeration) ? default(TValue) : other.Value);
         }
 
         public override sealed string ToString()
