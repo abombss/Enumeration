@@ -52,6 +52,8 @@
     <Compile Include="Color.cs" />
     <Compile Include="EqualityTests.cs" />
     <Compile Include="ParseTests.cs" />
+    <Compile Include="SortTests.cs" />
+    <Compile Include="State.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Main\Main.csproj">
