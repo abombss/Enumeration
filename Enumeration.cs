@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Serialization;
 
@@ -23,14 +24,14 @@ namespace Headspring
 
         public static bool TryFromInt32(int listItemValue, out TEnumeration result)
         {
-            return TryParse(listItemValue, out result);
+            return TryParseValue(listItemValue, out result);
         }
     }
 
     [Serializable]
     [DebuggerDisplay("{DisplayName} - {Value}")]
     [DataContract(Namespace = "http://github.com/HeadspringLabs/Enumeration/5/13")]
-    public abstract class Enumeration<TEnumeration, TValue> : IComparable<TEnumeration>, IEquatable<TEnumeration>
+    public abstract class Enumeration<TEnumeration, TValue> : IComparable<TEnumeration>, IEquatable<TEnumeration>, ISerializable
         where TEnumeration : Enumeration<TEnumeration, TValue>
         where TValue : IComparable
     {
@@ -108,6 +109,12 @@ namespace Headspring
             return Value.GetHashCode();
         }
 
+        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+          info.SetType(typeof(SerializationHelper));
+          info.AddValue("Value", Value);
+        }
+
         public static bool operator ==(Enumeration<TEnumeration, TValue> left, Enumeration<TEnumeration, TValue> right)
         {
             return Equals(left, right);
@@ -123,7 +130,7 @@ namespace Headspring
             return Parse(value, "value", item => item.Value.Equals(value));
         }
 
-        public static TEnumeration Parse(string displayName)
+        public static TEnumeration FromDisplayName(string displayName)
         {
             return Parse(displayName, "display name", item => item.DisplayName == displayName);
         }
@@ -147,14 +154,55 @@ namespace Headspring
             return result;
         }
 
-        public static bool TryParse(TValue value, out TEnumeration result)
+        public static bool TryParseValue(TValue value, out TEnumeration result)
         {
             return TryParse(e => e.Value.Equals(value), out result);
         }
 
-        public static bool TryParse(string displayName, out TEnumeration result)
+        public static bool TryParseFromDisplayName(string displayName, out TEnumeration result)
         {
             return TryParse(e => e.DisplayName == displayName, out result);
+        }
+
+        [Serializable]
+        private sealed class SerializationHelper : IObjectReference, ISerializable
+        {
+          readonly TValue _value;
+
+          static readonly Lazy<Func<TValue, TEnumeration>> LazyParser = new Lazy<Func<TValue, TEnumeration>>(
+            () =>
+            {
+              var method = typeof(TEnumeration).GetMethod(
+                "FromValue",
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy,
+                null,
+                new[] { typeof(TValue) },
+                null);
+
+              var valueParameter = Expression.Parameter(typeof(TValue), "value");
+              return Expression.Lambda<Func<TValue, TEnumeration>>(
+                Expression.Call(
+                  method,
+                  valueParameter),
+                  valueParameter)
+                .Compile();
+            });
+
+          private SerializationHelper(
+              SerializationInfo info, StreamingContext context)
+          {
+            _value = (TValue)info.GetValue("Value", typeof(TValue));
+          }
+
+          object IObjectReference.GetRealObject(StreamingContext context)
+          {
+            return LazyParser.Value(_value);
+          }
+
+          void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+          {
+            throw new NotSupportedException("Don't serialize me!");
+          }
         }
     }
 }
